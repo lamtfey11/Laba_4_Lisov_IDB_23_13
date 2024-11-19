@@ -1,4 +1,4 @@
-import telebot
+import telebot #бот
 import logging
 import requests
 
