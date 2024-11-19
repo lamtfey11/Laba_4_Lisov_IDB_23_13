@@ -16,5 +16,19 @@ bot = telebot.TeleBot(TELEGRAM_API_TOKEN)
 user_units = {}  # Словарь {user_id: "metric"/"imperial"} для хранения единиц измерения
 user_city = {}  # Словарь {user_id: "city"} для хранения города пользователя
 
+# Клавиатура
+main_keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+main_keyboard.row("Сменить единицы измерения", "Мой город", "Погода в моем городе")
+
+@bot.message_handler(commands=["start"])
+def start_command(message):
+    """Приветствие пользователя при старте."""
+    bot.send_message(
+        message.chat.id,
+        "Привет! Я бот для получения погоды. Напишите название города, чтобы узнать погоду, "
+        "или воспользуйтесь кнопками ниже.",
+        reply_markup=main_keyboard
+    )
+
 if __name__ == "__main__":
     bot.infinity_polling()
