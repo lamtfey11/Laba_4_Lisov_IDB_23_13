@@ -12,5 +12,9 @@ WEATHER_API_KEY = "eeaea6e6965d4b11c6da0f3f98eb4f80"  #API-ключ
 # Инициализация бота
 bot = telebot.TeleBot(TELEGRAM_API_TOKEN)
 
+# Переменные для хранения пользовательских настроек
+user_units = {}  # Словарь {user_id: "metric"/"imperial"} для хранения единиц измерения
+user_city = {}  # Словарь {user_id: "city"} для хранения города пользователя
+
 if __name__ == "__main__":
     bot.infinity_polling()
