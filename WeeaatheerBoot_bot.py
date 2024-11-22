@@ -1,6 +1,7 @@
 import telebot
 import logging
 import requests
+import json  # Для сохранения и загрузки данных
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -12,9 +13,26 @@ WEATHER_API_KEY = "eeaea6e6965d4b11c6da0f3f98eb4f80"  # Замените на в
 # Инициализация бота
 bot = telebot.TeleBot(TELEGRAM_API_TOKEN)
 
-# Переменные для хранения пользовательских настроек
-user_units = {}  # Словарь {user_id: "metric"/"imperial"} для хранения единиц измерения
-user_city = {}  # Словарь {user_id: "city"} для хранения города пользователя
+# Файл для сохранения пользовательских настроек
+DATA_FILE = "user_data.json"
+
+# Загрузка данных из файла
+def load_user_data():
+    try:
+        with open(DATA_FILE, "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}  # Если файл не существует, возвращаем пустой словарь
+    except json.JSONDecodeError:
+        return {}  # Если файл поврежден, возвращаем пустой словарь
+
+# Сохранение данных в файл
+def save_user_data():
+    with open(DATA_FILE, "w") as file:
+        json.dump(user_data, file, ensure_ascii=False, indent=4)
+
+# Загрузка данных при старте
+user_data = load_user_data()
 
 # Клавиатура
 main_keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -33,10 +51,14 @@ def start_command(message):
 @bot.message_handler(func=lambda message: message.text == "Сменить единицы измерения")
 def change_units(message):
     """Сменить единицы измерения температуры."""
-    user_id = message.from_user.id
-    current_unit = user_units.get(user_id, "metric")
+    user_id = str(message.from_user.id)  # Приводим ID к строке, чтобы использовать в JSON
+    current_unit = user_data.get(user_id, {}).get("units", "metric")
     new_unit = "imperial" if current_unit == "metric" else "metric"
-    user_units[user_id] = new_unit
+    
+    # Сохраняем новые единицы измерения
+    user_data.setdefault(user_id, {})["units"] = new_unit
+    save_user_data()  # Сохраняем изменения
+    
     unit_name = "Фаренгейт" if new_unit == "imperial" else "Цельсий"
     bot.send_message(message.chat.id, f"Единицы измерения изменены на: {unit_name}")
 
@@ -46,14 +68,16 @@ def set_city(message):
     bot.send_message(message.chat.id, "Введите название города, который вы хотите сохранить:")
 
     # Устанавливаем состояние ожидания ввода города
-    user_city[message.from_user.id] = "awaiting_city"
+    user_id = str(message.from_user.id)
+    user_data.setdefault(user_id, {})["state"] = "awaiting_city"
+    save_user_data()
 
 @bot.message_handler(func=lambda message: message.text == "Погода в моем городе")
 def weather_in_saved_city(message):
     """Выводит погоду для сохраненного города."""
-    user_id = message.from_user.id
-    city = user_city.get(user_id)
-    if city and city != "awaiting_city":
+    user_id = str(message.from_user.id)
+    city = user_data.get(user_id, {}).get("city")
+    if city:
         get_weather_for_city(message, city)
     else:
         bot.send_message(message.chat.id, "Вы ещё не сохранили свой город. Нажмите 'Мой город', чтобы сохранить его.")
@@ -61,12 +85,14 @@ def weather_in_saved_city(message):
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     """Обрабатывает ввод текста."""
-    user_id = message.from_user.id
+    user_id = str(message.from_user.id)
 
     # Если ожидается ввод города для сохранения
-    if user_city.get(user_id) == "awaiting_city":
+    if user_data.get(user_id, {}).get("state") == "awaiting_city":
         city = message.text.strip()
-        user_city[user_id] = city
+        user_data[user_id]["city"] = city
+        user_data[user_id]["state"] = None  # Сбрасываем состояние ожидания
+        save_user_data()
         bot.send_message(message.chat.id, f"Ваш город сохранён: {city}.")
     else:
         # Пользователь ввёл город для мгновенного запроса погоды
@@ -74,8 +100,8 @@ def handle_text(message):
 
 def get_weather_for_city(message, city):
     """Получить погоду для указанного города."""
-    user_id = message.from_user.id
-    units = user_units.get(user_id, "metric")  # Использовать сохранённые настройки пользователя
+    user_id = str(message.from_user.id)
+    units = user_data.get(user_id, {}).get("units", "metric")  # Использовать сохранённые настройки пользователя
 
     # Формирование URL для API
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units={units}&lang=ru"
